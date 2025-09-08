@@ -1,0 +1,43 @@
+name: Build tuic-server binary
+
+on:
+  push:
+    branches:
+      - impl-1.0
+  workflow_dispatch: # 手动触发也行
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 拉取代码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 安装 Rust
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      # 添加 musl 支持（静态编译）
+      - name: Add musl target
+        run: rustup target add x86_64-unknown-linux-musl
+
+      # 安装 musl 工具链
+      - name: Install musl tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools pkg-config libssl-dev
+
+      # 构建 tuic-server (静态编译)
+      - name: Build tuic-server
+        run: cargo build --release --target x86_64-unknown-linux-musl --bin tuic-server
+
+      # 上传构建产物
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuic-server-x86_64-musl
+          path: target/x86_64-unknown-linux-musl/release/tuic-server
