@@ -1,43 +1,52 @@
-name: Build tuic-server binary
+name: Build tuic-server multi-arch Docker image
 
 on:
   push:
     branches:
       - impl-1.0
-  workflow_dispatch: # 手动触发也行
+  workflow_dispatch:
 
 jobs:
-  build:
+  docker:
     runs-on: ubuntu-latest
-
     steps:
       # 拉取代码
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 安装 Rust
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
+      # 设置 QEMU (支持跨架构编译)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # 设置 Buildx (支持多架构)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 构建 amd64 镜像并导出
+      - name: Build amd64 image
+        uses: docker/build-push-action@v5
         with:
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          outputs: type=docker,dest=./tuic-server-amd64.tar
+          tags: tuic-server:amd64
 
-      # 添加 musl 支持（静态编译）
-      - name: Add musl target
-        run: rustup target add x86_64-unknown-linux-musl
-
-      # 安装 musl 工具链
-      - name: Install musl tools
-        run: sudo apt-get update && sudo apt-get install -y musl-tools pkg-config libssl-dev
-
-      # 构建 tuic-server (静态编译)
-      - name: Build tuic-server
-        run: cargo build --release --target x86_64-unknown-linux-musl --bin tuic-server
+      # 构建 arm64 镜像并导出
+      - name: Build arm64 image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          outputs: type=docker,dest=./tuic-server-arm64.tar
+          tags: tuic-server:arm64
 
       # 上传构建产物
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tuic-server-x86_64-musl
-          path: target/x86_64-unknown-linux-musl/release/tuic-server
+          name: tuic-server-docker-images
+          path: |
+            tuic-server-amd64.tar
+            tuic-server-arm64.tar
